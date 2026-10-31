@@ -9,6 +9,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./app/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ./seed/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      - ./app/deploy/03-reconcile.sql:/docker-entrypoint-initdb.d/03-reconcile.sql
 
   app:
     build: ./app
