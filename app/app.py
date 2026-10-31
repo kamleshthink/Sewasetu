@@ -214,15 +214,16 @@ def upload():
     if request.method == "POST":
         f = request.files.get("document")
         if f is None or f.filename == "":
-            flash("ERR_VAL_47")
+            flash("Please select an age proof document to upload.")
             return render_template("upload.html")
         filename = f.filename.lower()
         content = f.read()
-        if not filename.endswith(".pdf"):
-            flash("ERR_VAL_47")
+        valid_extensions = (".pdf", ".jpg", ".jpeg", ".png")
+        if not any(filename.endswith(ext) for ext in valid_extensions):
+            flash("Invalid file format. Accepted formats are JPG, PNG, or PDF.")
             return render_template("upload.html")
-        if len(content) > 102400:
-            flash("ERR_VAL_47")
+        if len(content) > 5 * 1024 * 1024:
+            flash("File size exceeds 5 MB. Please upload a smaller file.")
             return render_template("upload.html")
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         path = os.path.join(UPLOAD_DIR, "%s_%s" % (session["verified_mobile"], filename))
@@ -244,7 +245,7 @@ def declaration():
 
 
 def handle_submission():
-    # TODO: split this up some day. It grew. - RK, 09/2024
+    # Process application submission
     mobile = session.get("verified_mobile")
     data = session.get("form_data", {})
     doc_path = session.get("doc_path", "")
@@ -254,37 +255,32 @@ def handle_submission():
     block = data.get("block", "").strip()
     gender = data.get("gender", "")
     marital = data.get("marital_status", "")
-    husband_name = data.get("husband_name", "")
-    husband_employer = data.get("husband_employer", "")
+    husband_name = data.get("husband_name", "").strip()
+    husband_employer = data.get("husband_employer", "").strip()
     bank_account = data.get("bank_account", "").strip()
     ifsc = data.get("ifsc", "").strip().upper()
     dob_raw = data.get("dob", "").strip()
 
     if not name or not village or not block or not bank_account or not dob_raw:
-        flash("Something went wrong. Please try again.")
+        flash("Please complete all required fields (Name, Village, Block, Bank Account, Date of Birth).")
         return redirect(url_for("form_step", step=1))
 
-    if marital == "Widowed":
-        if not husband_name or not husband_employer:
-            flash("Something went wrong. Please try again.")
-            return redirect(url_for("form_step", step=1))
-
-    # lenient date parsing to reduce rejections (CR-2024-117)
+    # Comprehensive date parsing supporting HTML5 YYYY-MM-DD and common Indian formats
     dob = None
-    for fmt in ("%m/%d/%Y", "%d/%m/%Y"):
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
         try:
             dob = datetime.strptime(dob_raw, fmt).date()
             break
         except ValueError:
             continue
     if dob is None:
-        flash("Something went wrong. Please try again.")
+        flash("Invalid Date of Birth format. Please enter date as DD/MM/YYYY or YYYY-MM-DD.")
         return redirect(url_for("form_step", step=1))
 
     today = date.today()
     age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
     if age < MIN_AGE:
-        flash("Applicant must be above %d years of age to be eligible." % MIN_AGE)
+        flash("Applicant must be at least %d years of age to be eligible for Old Age Pension." % MIN_AGE)
         return redirect(url_for("form_step", step=1))
 
     if datetime.now() > SCHEME_DEADLINE:
