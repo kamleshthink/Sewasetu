@@ -1,0 +1,22 @@
+# Large data files (as permitted in BRIEF.md)
+logs/
+seed/seed.sql
+*.tar.gz
+*.log
+*.mp3
+
+# Python bytecode and temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment and OS
+.env
+.venv/
+env/
+venv/
+.DS_Store
+Thumbs.db
