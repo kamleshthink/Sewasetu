@@ -35,3 +35,9 @@ CREATE TABLE IF NOT EXISTS otps (
     code       VARCHAR(6),
     created_at TIMESTAMP
 );
+
+-- Performance indexes for 100k records (prevents month-end full table scans)
+CREATE INDEX IF NOT EXISTS idx_applications_mobile ON applications(mobile);
+CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status, submitted_at);
+CREATE INDEX IF NOT EXISTS idx_applications_block ON applications(block);
+CREATE INDEX IF NOT EXISTS idx_otps_mobile ON otps(mobile, id DESC);

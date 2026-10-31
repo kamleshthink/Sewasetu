@@ -55,7 +55,50 @@ except Exception:
     pass
 
 
+from psycopg2 import pool
+from contextlib import contextmanager
+
+db_pool = None
+
+def get_db_pool():
+    global db_pool
+    if db_pool is None or db_pool.closed:
+        try:
+            db_pool = pool.ThreadedConnectionPool(
+                minconn=2,
+                maxconn=20,
+                host=config.get("database", "host"),
+                port=config.get("database", "port"),
+                dbname=config.get("database", "name"),
+                user=config.get("database", "user"),
+                password=config.get("database", "password"),
+            )
+        except Exception as e:
+            app.logger.warning("Connection pool initialization: %s" % e)
+    return db_pool
+
+
+@contextmanager
+def get_db_conn():
+    p = get_db_pool()
+    if p:
+        conn = p.getconn()
+        try:
+            yield conn
+        finally:
+            p.putconn(conn)
+    else:
+        conn = get_db()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+
 def get_db():
+    p = get_db_pool()
+    if p:
+        return p.getconn()
     return psycopg2.connect(
         host=config.get("database", "host"),
         port=config.get("database", "port"),
