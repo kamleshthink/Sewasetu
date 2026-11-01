@@ -6,3 +6,4 @@ SET status = 'DEEMED_APPROVED',
     decided_by = 'RTPS-AUTO'
 WHERE status = 'PENDING'
   AND submitted_at < NOW() - INTERVAL '15 days';
+

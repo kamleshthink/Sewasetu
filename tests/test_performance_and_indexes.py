@@ -36,3 +36,4 @@ class TestPerformanceAndIndexes(unittest.TestCase):
             hasattr(app, "db_pool") or hasattr(app, "get_db_conn"),
             "app.py should provide a connection pool manager to avoid client exhaustion"
         )
+

@@ -58,3 +58,4 @@ class TestDeemedApproval(unittest.TestCase):
 
         # Check SMS notifications were triggered
         self.assertEqual(mock_post.call_count, 2)
+

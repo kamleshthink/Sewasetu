@@ -92,3 +92,4 @@ class TestSecurityAndAuth(unittest.TestCase):
         """
         response = self.client.get("/ack/100.pdf")
         self.assertIn(response.status_code, (401, 403, 302))
+
