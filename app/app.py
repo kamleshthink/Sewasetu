@@ -30,12 +30,12 @@ app = Flask(__name__)
 app.secret_key = config.get("app", "secret_key")
 app.config["PERMANENT_SESSION_LIFETIME"] = 300
 
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "sewasetu@123"
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "sewasetu@123")
 
-SMS_GATEWAY_URL = config.get("app", "sms_gateway_url")
+SMS_GATEWAY_URL = os.environ.get("SMS_GATEWAY_URL", config.get("app", "sms_gateway_url"))
 OTP_VALIDITY_SECONDS = config.getint("app", "otp_validity_seconds")
-UPLOAD_DIR = config.get("app", "upload_dir")
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", config.get("app", "upload_dir"))
 SCHEME_DEADLINE = datetime.strptime(config.get("pension", "scheme_deadline"),
                                     "%Y-%m-%d %H:%M")
 MIN_AGE = config.getint("pension", "min_age")
@@ -60,19 +60,27 @@ from contextlib import contextmanager
 
 db_pool = None
 
+def get_db_params():
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        # Normalize postgres:// to postgresql:// if needed for psycopg2
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        return {"dsn": db_url}
+    return {
+        "host": os.environ.get("DB_HOST", config.get("database", "host")),
+        "port": os.environ.get("DB_PORT", config.get("database", "port")),
+        "dbname": os.environ.get("DB_NAME", config.get("database", "name")),
+        "user": os.environ.get("DB_USER", config.get("database", "user")),
+        "password": os.environ.get("DB_PASSWORD", config.get("database", "password")),
+    }
+
 def get_db_pool():
     global db_pool
     if db_pool is None or db_pool.closed:
         try:
-            db_pool = pool.ThreadedConnectionPool(
-                minconn=2,
-                maxconn=20,
-                host=config.get("database", "host"),
-                port=config.get("database", "port"),
-                dbname=config.get("database", "name"),
-                user=config.get("database", "user"),
-                password=config.get("database", "password"),
-            )
+            params = get_db_params()
+            db_pool = pool.ThreadedConnectionPool(minconn=2, maxconn=20, **params)
         except Exception as e:
             app.logger.warning("Connection pool initialization: %s" % e)
     return db_pool
@@ -99,13 +107,7 @@ def get_db():
     p = get_db_pool()
     if p:
         return p.getconn()
-    return psycopg2.connect(
-        host=config.get("database", "host"),
-        port=config.get("database", "port"),
-        dbname=config.get("database", "name"),
-        user=config.get("database", "user"),
-        password=config.get("database", "password"),
-    )
+    return psycopg2.connect(**get_db_params())
 
 
 def sanitize(value, maxlen=100):
@@ -120,6 +122,28 @@ def sanitize(value, maxlen=100):
 
 def hash_password(p):
     return hashlib.sha256(p.encode("utf-8")).hexdigest()
+
+
+def check_or_start_smsgw():
+    global SMS_GATEWAY_URL
+    try:
+        requests.get(SMS_GATEWAY_URL + "/api/messages", timeout=1)
+    except Exception:
+        try:
+            import threading
+            smsgw_dir = os.path.join(os.path.dirname(BASE_DIR), "smsgw")
+            if os.path.exists(smsgw_dir):
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("smsgw_standalone", os.path.join(smsgw_dir, "app.py"))
+                gw_mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(gw_mod)
+                t = threading.Thread(target=lambda: gw_mod.app.run(host="127.0.0.1", port=8025, debug=False, use_reloader=False), daemon=True)
+                t.start()
+                SMS_GATEWAY_URL = "http://127.0.0.1:8025"
+        except Exception:
+            pass
+
+check_or_start_smsgw()
 
 
 def send_sms(mobile, text):
